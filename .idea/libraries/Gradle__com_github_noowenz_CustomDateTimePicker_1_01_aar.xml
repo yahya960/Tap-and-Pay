@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Gradle: com.github.noowenz:CustomDateTimePicker:1.01@aar">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/63f3908276b93ad082b03429c203f63e/jetified-CustomDateTimePicker-1.01/jars/classes.jar!/" />
+      <root url="file://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/63f3908276b93ad082b03429c203f63e/jetified-CustomDateTimePicker-1.01/res" />
+      <root url="file://$USER_HOME$/.gradle/caches/transforms-2/files-2.1/63f3908276b93ad082b03429c203f63e/jetified-CustomDateTimePicker-1.01/AndroidManifest.xml" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.github.noowenz/CustomDateTimePicker/1.01/3ada01b5767d2c4174cf919269da7408d2226651/CustomDateTimePicker-1.01-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

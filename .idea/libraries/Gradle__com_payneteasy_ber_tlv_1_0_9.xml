@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Gradle: com.payneteasy:ber-tlv:1.0-9">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.payneteasy/ber-tlv/1.0-9/9f74d9a1e139b1609a32acbbaac6c5ced83e6521/ber-tlv-1.0-9.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.payneteasy/ber-tlv/1.0-9/9d603b465cc726e4c69530d518727a369733363c/ber-tlv-1.0-9-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.payneteasy/ber-tlv/1.0-9/89afeff695b8a2a3b7cd1d138279e5873a52e0dd/ber-tlv-1.0-9-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

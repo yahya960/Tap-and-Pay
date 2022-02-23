@@ -1,0 +1,107 @@
+apply plugin: 'com.android.application'
+
+def keystoreProperties = new Properties()
+keystoreProperties.load(new FileInputStream(rootProject.file("keystore/keystore.properties")))
+def APP_VERSION_CODE=630
+def SDK_VERSION="6.3.0"
+def SDK_QUALIFIER="rc01"
+def SDK_PROD_VARIANT="default"
+android {
+    compileSdkVersion 29
+    buildToolsVersion = '29.0.3'
+    defaultConfig {
+        applicationId "test.hcesdk.mpay"
+        minSdkVersion 23
+        targetSdkVersion 29
+        versionCode APP_VERSION_CODE
+        versionName SDK_VERSION
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        multiDexEnabled true
+    }
+
+    configurations {
+        debug
+        release
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file("${project.rootDir}/${keystoreProperties['debugStoreFile']}")
+            storePassword keystoreProperties['debugStorePassword']
+            keyAlias keystoreProperties['debugKeyAlias']
+            keyPassword keystoreProperties['debugKeyPassword']
+        }
+        release {
+            storeFile file("${project.rootDir}/${keystoreProperties['releaseStoreFile']}")
+            storePassword keystoreProperties['releaseStorePassword']
+            keyAlias keystoreProperties['releaseKeyAlias']
+            keyPassword keystoreProperties['releaseKeyPassword']
+        }
+    }
+
+    // Multiple APKs based on ABI.
+    splits {
+        abi {
+            // Enables building multiple APKs per ABI.
+            enable true
+
+            // Clears the default list from all ABIs to no ABIs.
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a'
+            // Specifies that we do not want to also generate a universal APK that includes all ABIs.
+            universalApk false
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            minifyEnabled true
+            signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        customDebugType {
+            debuggable true
+         }
+
+    }
+    compileOptions {
+        sourceCompatibility = 1.8
+        targetCompatibility = 1.8
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.2.0'
+    implementation 'androidx.media:media:1.2.0'
+    implementation 'com.google.android.material:material:1.2.1'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.2'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
+
+    implementation 'androidx.multidex:multidex:2.0.1'
+
+    //fcm
+    implementation "com.google.android.gms:play-services-base:17.4.0"
+    implementation "com.google.firebase:firebase-messaging:20.2.4"
+    //debugImplementation ":MobileGateway-hce-4.4.0.rc01-debug@aar"
+    //sdk
+    debugImplementation ":TSHPaySDK-debug-$SDK_VERSION.$SDK_QUALIFIER-$SDK_PROD_VARIANT@aar"
+    releaseImplementation ":TSHPaySDK-release-$SDK_VERSION.$SDK_QUALIFIER-$SDK_PROD_VARIANT@aar"
+
+    //sdk's dependencies
+    implementation 'net.java.dev.jna:jna:5.5.0@aar'
+
+    //qrcode dependencies
+    implementation "com.journeyapps:zxing-android-embedded:3.6.0"
+    implementation "com.google.zxing:core:3.3.2"
+    implementation "com.payneteasy:ber-tlv:1.0-9"
+    implementation 'com.github.noowenz:CustomDateTimePicker:1.01'
+}
+
+apply plugin: 'com.google.gms.google-services'
+
+

@@ -1,0 +1,419 @@
+package test.hcesdk.mpay.payment.contactless;
+
+import android.content.Context;
+import android.os.Bundle;
+import android.os.PowerManager;
+
+import androidx.swiperefreshlayout.widget.CircularProgressDrawable;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.appcompat.widget.Toolbar;
+
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.gemalto.mfs.mwsdk.dcm.DigitalizedCard;
+import com.gemalto.mfs.mwsdk.dcm.DigitalizedCardDetails;
+import com.gemalto.mfs.mwsdk.dcm.DigitalizedCardErrorCodes;
+import com.gemalto.mfs.mwsdk.dcm.DigitalizedCardManager;
+import com.gemalto.mfs.mwsdk.dcm.DigitalizedCardState;
+import com.gemalto.mfs.mwsdk.dcm.PaymentType;
+import com.gemalto.mfs.mwsdk.payment.CHVerificationMethod;
+import com.gemalto.mfs.mwsdk.payment.CVMResetTimeoutListener;
+import com.gemalto.mfs.mwsdk.payment.PaymentBusinessManager;
+import com.gemalto.mfs.mwsdk.payment.PaymentBusinessService;
+import com.gemalto.mfs.mwsdk.payment.PaymentServiceErrorCode;
+import com.gemalto.mfs.mwsdk.payment.engine.CardActivationListener;
+import com.gemalto.mfs.mwsdk.payment.engine.PaymentService;
+import com.gemalto.mfs.mwsdk.payment.engine.TransactionContext;
+import com.gemalto.mfs.mwsdk.utils.async.AbstractAsyncHandler;
+import com.gemalto.mfs.mwsdk.utils.async.AsyncResult;
+import com.google.android.material.snackbar.Snackbar;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import test.hcesdk.mpay.App;
+import test.hcesdk.mpay.R;
+import test.hcesdk.mpay.model.MyDigitalCard;
+import test.hcesdk.mpay.util.AppExecutors;
+import test.hcesdk.mpay.util.AppLogger;
+import test.hcesdk.mpay.util.CardListAdapter;
+import test.hcesdk.mpay.util.SharedPreferenceUtils;
+import test.hcesdk.mpay.util.TransactionContextHelper;
+
+public class CardChooserActivity extends AppCompatActivity implements CardListAdapter.CardListAdapterCallback, CVMResetTimeoutListener {
+
+    private static final String TAG = CardChooserActivity.class.getSimpleName();
+
+    private AppExecutors appExecutors;
+    private View progress_layout;
+    private RecyclerView recyclerView;
+    private SwipeRefreshLayout swipeRefreshLayout;
+    private ContactlessPayListener payListener;
+    private PowerManager.WakeLock mWakeLock;
+    CircularProgressDrawable timerDrawable;
+    TextView lblTimer;
+
+    private View payButton;
+    private MyDigitalCard selectedCard = null;
+
+
+    @Override
+    public void onBtnDelete(MyDigitalCard card) {
+
+    }
+
+    @Override
+    public void onPaymentClicked(MyDigitalCard card) {
+
+    }
+
+    @Override
+    public void setDefaultCardAction(MyDigitalCard card) {
+        AppLogger.d(TAG, "[set Default Card]-" + card.getTokenId());
+        toggleProgress(true);
+        DigitalizedCardState status = card.getCardStatus().getState();
+        if (status == DigitalizedCardState.SUSPENDED) {
+            Toast.makeText(CardChooserActivity.this,
+                    "The card is Suspended.You cannot use the card to make payment",
+                    Toast.LENGTH_LONG).show();
+            finish();
+
+
+        } else {
+            DigitalizedCardManager.getDigitalizedCard(card.getTokenId()).setDefault(PaymentType.DSRP, new AbstractAsyncHandler<Void>() {
+                @Override
+                public void onComplete(AsyncResult<Void> asyncResult) {
+                    toggleProgress(false);
+                    //String defaultCardTokenID = card.getTokenId();
+                    //SharedPreferenceUtils.saveDefaultCard(getApplicationContext(), defaultCardTokenID);
+                    Toast.makeText(CardChooserActivity.this,
+                            "Card (" + card.getTokenId() + ") set to default for payment",
+                            Toast.LENGTH_LONG).show();
+                    finish();
+
+                }
+            });
+        }
+    }
+
+    @Override
+    public void onBtnHistoryClicked(MyDigitalCard card) {
+
+    }
+
+    @Override
+    public void onLongClickCard(MyDigitalCard card) {
+
+    }
+
+    @Override
+    public void onDsrpClicked(MyDigitalCard card) {
+
+    }
+
+    protected void onCreate(Bundle savedInstanceState) {
+
+        AppLogger.d(TAG, "CardChooserActivity.onCreate()");
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_card_chooser);
+        appExecutors = ((App) getApplication()).getAppExecutors();
+
+        lblTimer = findViewById(R.id.timer_label);
+        recyclerView = findViewById(R.id.recyclerView);
+        progress_layout = findViewById(R.id.progress_layout);
+        swipeRefreshLayout = findViewById(R.id.swipeRefresh);
+        recyclerView.setLayoutManager(new LinearLayoutManager(getApplicationContext()));
+
+
+        //Set the custom toolbar to the App
+        Toolbar myToolbar = findViewById(R.id.topToolBar);
+        setToolbarProperties(myToolbar);
+        //Need to check why setting this, makes the menu disappear
+        //and because of this test.hcesdk.mpay.addCard.AddCardActivity.onCreate line 50,51 needs to be commented.
+        // setSupportActionBar(myToolbar);
+        swipeRefreshLayout.setOnRefreshListener(this::loadCards);
+        swipeRefreshLayout.setColorSchemeResources(
+                android.R.color.holo_blue_dark,
+                android.R.color.holo_green_dark,
+                android.R.color.holo_orange_dark,
+                android.R.color.holo_red_dark
+        );
+        timerDrawable = new CircularProgressDrawable(CardChooserActivity.this);
+        ImageView timerImg = findViewById(R.id.timer_image);
+        timerImg.setImageDrawable(timerDrawable);
+        timerDrawable.start();
+
+        final TextView tvAmount = findViewById(R.id.tv_amount);
+        payListener = ((App) getApplication()).getContactlessPayListener();
+
+        if (payListener != null && payListener.getPaymentService() != null) {
+            final TransactionContext transactionContext = payListener.getTransactionContext();
+            if (transactionContext != null) {
+                tvAmount.setText(TransactionContextHelper.formatAmountWithCurrency(transactionContext));
+            }
+            payListener.getPaymentService().setCVMResetTimeoutListener(this);
+            lblTimer.setText(String.valueOf(((PaymentState.PaymentStateAuthenticationRequired)payListener.getCurrentState()).getCvmResetTimeout() / 1000));
+        } else {
+            findViewById(R.id.transactionDetailLayout).setVisibility(View.GONE);
+        }
+        unlockAndWake();
+        loadCards();
+
+    }
+
+    public void unlockAndWake() {
+        AppLogger.d(TAG, "unlockAndWake is invoked");
+
+        //Return if mWakelock is non null as it's already initialized and acquired
+        if (mWakeLock != null && mWakeLock.isHeld())
+            return;
+
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+
+        if (pm != null && !pm.isInteractive()) {
+            mWakeLock = pm.newWakeLock(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                    | PowerManager.ACQUIRE_CAUSES_WAKEUP, getResources().getString(R.string.app_name) + "CA:wakelock");
+            if (mWakeLock != null)
+                mWakeLock.acquire();
+        }
+
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
+    }
+
+    public void releaseWakeLockAndClearFlag() {
+        AppLogger.d(TAG, "WakeLock is released");
+
+        if (mWakeLock != null) {
+            try {
+                mWakeLock.release();
+            } catch (Exception e) {
+                // Ignoring this exception, probably wakeLock was already released
+                AppLogger.e(TAG, "Exception observed in releasing wakeLock");
+            } finally {
+                mWakeLock = null;
+            }
+        }
+
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
+    }
+
+    private void loadCards() {
+        loadCards(null);
+    }
+
+    //Helper method to set Toolbar menu and listener
+    private void setToolbarProperties(Toolbar myToolbar) {
+        myToolbar.setTitle(R.string.choose_a_card);
+        payButton = myToolbar.findViewById(R.id.topToolBarButton);
+        payButton.setOnClickListener(v -> {
+            if (selectedCard != null) {
+                if (payListener.getPaymentService() != null) {
+                    activateCardForPayment(selectedCard);
+                } else {
+                    setDefaultCardAction(selectedCard);
+                }
+                payButton.setEnabled(false);
+                payButton.setClickable(false);
+                payButton.setOnClickListener(null);
+                payButton.setActivated(false);
+            } else {
+                Toast.makeText(CardChooserActivity.this, "Choose a card to pay", Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        releaseWakeLockAndClearFlag();
+    }
+
+    private void activateCardForPayment(final MyDigitalCard card) {
+
+        AppLogger.d(TAG, "Switching default card for payment to: " + card.getTokenId());
+
+
+        final PaymentBusinessService paymentBusinessService = PaymentBusinessManager.getPaymentBusinessService();
+
+        CardActivationListener cardActivationListener = new CardActivationListener() {
+            @Override
+            public void onCardActivated(PaymentServiceErrorCode paymentServiceErrorCode) {
+                AppLogger.d(TAG, "onCardActivated(): paymentServiceErrorCode = " + paymentServiceErrorCode);
+
+                appExecutors.mainThread().execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        // The timer should be the last visible fragment so no need to recreate,
+                        // just hide the progress indicator
+                        toggleProgress(false);
+
+                        if (paymentServiceErrorCode == PaymentServiceErrorCode.SUCCESS) {
+                            payListener.onReadyToTap(payListener.getPaymentService());
+                            finish();
+                        } else {
+                            final String logMessage = getString(R.string.error_default_card_set_fail) + " Reason: " + paymentServiceErrorCode.name();
+                            Toast.makeText(CardChooserActivity.this, logMessage, Toast.LENGTH_LONG).show();
+                            //displayAndLogError(getString(R.string.error_default_card_set_fail), logMessage);
+                            finish();
+
+                        }
+                    }
+                });
+            }
+        };
+
+        paymentBusinessService.activateCard(card.getTokenId(), PaymentType.CONTACTLESS, payListener, cardActivationListener);
+
+
+    }
+
+    private void loadCards(final String tokenID) {
+
+        AppLogger.d(TAG, "loadCards");
+        DigitalizedCardManager.getAllCards(new AbstractAsyncHandler<String[]>() {
+            @Override
+            public void onComplete(AsyncResult<String[]> asyncResult) {
+                swipeRefreshLayout.setRefreshing(false);
+                toggleProgress(false);
+                if (asyncResult.isSuccessful()) {
+                    AppLogger.d(TAG, "Success for GetAllCards");
+                    List<DigitalizedCard> allCards = new ArrayList<>();
+                    for (String token : asyncResult.getResult()) {
+                        allCards.add(DigitalizedCardManager.getDigitalizedCard(token));
+                    }
+
+                    List<MyDigitalCard> mCards = new ArrayList<>();
+                    for (DigitalizedCard card : allCards) {
+                        MyDigitalCard mCard = new MyDigitalCard(card);
+
+                        mCard.setDigitalizedCardId(DigitalizedCardManager.getDigitalCardId(card.getTokenizedCardID()));
+                        //check default
+                        mCard.setDefaultCardFlag(card.isDefault(PaymentType.CONTACTLESS, null).waitToComplete().getResult());
+                        DigitalizedCardDetails digitalizedCardDetails=card.getCardDetails(null).waitToComplete().getResult();
+                        mCard.setRemotePaymentSupported(digitalizedCardDetails.isPaymentTypeSupported(PaymentType.DSRP));
+
+                        //get card status
+                        mCard.setCardStatus(card.getCardState(null).waitToComplete().getResult());
+
+                        if (null != tokenID && tokenID.equalsIgnoreCase(card.getTokenizedCardID())) {
+                            mCard.setSelected(true);
+                            selectedCard = mCard;
+
+                        } else {
+                            mCard.setSelected(false);
+                            if (tokenID == null) {
+                                if (mCard.isDefaultCardFlag()) {
+                                    mCard.setSelected(true);
+                                    selectedCard = mCard;
+                                } else {
+                                    mCard.setSelected(false);
+                                }
+                            }
+                        }
+
+                        boolean isRemotePaymentContext=payListener.getPaymentService()==null;
+                        boolean isRemotePaymentSupported=mCard.isRemotePaymentSupported();
+
+                        //Select for payment only when card is active.
+                        if (mCard.getCardStatus().getState() == DigitalizedCardState.ACTIVE) {
+                            if(!isRemotePaymentContext) {
+                                mCards.add(mCard);
+                            }else{
+                                if(isRemotePaymentSupported){
+                                    mCards.add(mCard);
+                                }
+                            }
+                        }
+                    }
+
+                    findViewById(R.id.no_cards).setVisibility((mCards.size() > 0) ? View.GONE : View.VISIBLE);
+                    AppLogger.d(TAG, "SetAdapter");
+                    CardListAdapter cardListAdapter = new CardListAdapter(getApplicationContext(), CardChooserActivity.this, mCards, CardListAdapter.DisplayType.CARD_LIST_CHOOSER);
+                    recyclerView.setAdapter(cardListAdapter);
+                    final int scrollPosition = (mCards.indexOf(selectedCard) >= 0 ? mCards.indexOf(selectedCard) : 0);
+                    recyclerView.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            recyclerView.smoothScrollToPosition(scrollPosition);
+                        }
+                    }, 100);
+
+
+                } else {
+
+                    int errorCode = asyncResult.getErrorCode();
+                    AppLogger.d(TAG, "There are no cards and there is error" + errorCode);
+                    if (errorCode == DigitalizedCardErrorCodes.CD_CVM_REQUIRED) {
+                        //TODO: Handle to close the activity.
+                    }
+                }
+            }
+        });
+
+    }
+
+    @Override
+    public void onCheckboxClicked(MyDigitalCard card) {
+        loadCards(card.getTokenId());
+    }
+
+    public void toggleProgress(final boolean show) {
+        appExecutors.mainThread().execute(new Runnable() {
+            @Override
+            public void run() {
+                progress_layout.setVisibility(show ? View.VISIBLE : View.GONE);
+            }
+        });
+    }
+
+    @Override
+    public void onCredentialsTimeoutCountDown(final int i) {
+
+
+        appExecutors.mainThread().execute(new Runnable() {
+            @Override
+            public void run() {
+
+                if (i <= 10) {
+                    lblTimer.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+                } else if (i <= 15) {
+                    lblTimer.setTextColor(getResources().getColor(android.R.color.holo_orange_dark));
+                } else {
+                    lblTimer.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
+                }
+                lblTimer.setText(String.valueOf(i));
+            }
+        });
+    }
+
+    @Override
+    public void onCredentialsTimeout(PaymentService paymentService, CHVerificationMethod chVerificationMethod, long l) {
+
+        AppLogger.d(TAG, "onCredentialsTimeout1");
+
+        appExecutors.mainThread().execute(new Runnable() {
+            @Override
+            public void run() {
+                AppLogger.d(TAG, "onCredentialsTimeout2");
+
+                AppLogger.d(TAG, "Show error and deactivate");
+                payListener.showPaymentTimeoutScreen();
+                finish();
+                //((PaymentContactlessActivity) getActivity()).deactivatePaymentServiceAndResetState();
+            }
+        });
+    }
+}

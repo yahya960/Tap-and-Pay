@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/card"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="16dp"
+    android:elevation="3dp"
+    app:cardCornerRadius="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/vertical_padding">
+
+        <RelativeLayout
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            android:gravity="start">
+
+            <RadioButton
+                android:id="@+id/radioButtonListView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="false"
+                android:focusable="false"
+                android:clickable="false"
+                />
+
+            <TextView
+                android:id="@+id/tvCardInfo"
+                android:layout_toRightOf="@id/radioButtonListView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                tools:text="Token ID:\nDigital Card ID:\nDefault: false\nPayment Remaining: 10"/>
+        </RelativeLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:orientation="horizontal">
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/imgBtnSetDefault"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="24dp"
+                android:background="@android:color/white"
+                android:padding="8dp"
+                android:src="@drawable/ic_default" />
+
+
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/imgBtnDelete"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="24dp"
+                android:background="@android:color/white"
+                android:padding="8dp"
+                android:src="@drawable/ic_delete" />
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/imgBtnPayment"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="24dp"
+                android:background="@android:color/white"
+                android:padding="8dp"
+                android:src="@drawable/ic_payment" />
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/imgBtnGetHistory"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="24dp"
+                android:background="@android:color/white"
+                android:padding="8dp"
+                android:src="@drawable/ic_history" />
+            <ImageView
+                android:id="@+id/btnDsrp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="24dp"
+                android:padding="8dp"
+                android:src="@drawable/dsrp" />
+        </LinearLayout>
+
+
+
+
+    </LinearLayout>
+</androidx.cardview.widget.CardView>
+
