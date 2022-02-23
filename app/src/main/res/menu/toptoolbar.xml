@@ -1,0 +1,30 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Settings, should always be in the overflow -->
+    <item android:id="@+id/action_about"
+          android:title="@string/txt_about"
+          app:showAsAction="never"/>
+    <item
+        android:id="@+id/action_setting"
+        android:title="@string/action_settings"
+        app:showAsAction="never"/>
+    <item
+        android:id="@+id/action_enroll_by_webui"
+        android:title="@string/action_enroll_by_webui"
+        app:showAsAction="never"/>
+    <item
+        android:id="@+id/action_disablePushNoti"
+        android:title="@string/action_disable_pushnoti"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_enablePushNoti"
+        android:title="@string/action_clearmock"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_delegated_cdcvm"
+        android:title="@string/action_enable_delegated_cdcvm"
+        app:showAsAction="never" />
+</menu>

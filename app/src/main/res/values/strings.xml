@@ -1,0 +1,131 @@
+<resources>
+    <string name="app_name">Training App</string>
+
+    <!-- Add card -->
+    <string name="add_card">Add</string>
+    <string name="choose_a_card">Choose a Card to Pay</string>
+    <string name="choose_card">Select</string>
+    <string name="no_card_found">No cards found</string>
+
+
+    <string name="card_no">Card No</string>
+    <string name="expiry">Expiry (MMYY)</string>
+    <string name="cvv">CVV</string>
+    <string name="invalid_pan">Invalid PAN</string>
+    <string name="invalid_expiry">Invalid Expiry</string>
+    <string name="invalid_cvv">Invalid CVV</string>
+    <string name="accept">Accept</string>
+    <string name="notification_service_channel">Foreground notification</string>
+    <string name="foreground_service_message">Application is running in foreground</string>
+
+    <string name="mg_notification_message">This notification is posted to run internal operation of mg sdk</string>
+    <string name="mg_notification_channel_id">MG_SDK_NOTIFICATION</string>
+    <string name="cps_notification_message">This notification is posted to run internal operation of cps sdk</string>
+    <string name="cps_notification_channel_id">CPS_SDK_NOTIFICATION</string>
+
+    <!-- Payment -->
+    <string name="title_payment">Payment</string>
+    <string name="btn_ok">OK</string>
+    <string name="enter_pin">ENTER PIN</string>
+    <string name="authenticate_by_wallet_pin">Wallet PIN</string>
+    <string name="wallet_pin">Wallet Pin</string>
+    <string name="please_enter_otp">Please Enter OTP</string>
+    <string name="otp">OTP</string>
+    <string name="wrong_pin">Wrong PIN! You only have </string>
+    <string name="tap_finger_print">Authenticate using Fingerprint</string>
+    <string name="retries"> retries left. Retry?</string>
+    <string name="maximum_attempt">Reached Maximum attempted</string>
+    <string name="text_retry_wallet_pin">Remaining retries: %d</string>
+    <string name="verify_using_fingerprint">Verify your Fingerprint</string>
+    <string name="please_try_again">. Please try again.</string>
+    <string name="unable_to_recognise_fingerprint">Unable to recognize. Please try again.</string>
+    <string name="verify_by_keyguard">Verify by Keyguard</string>
+    <string name="verify_by_keyguard_msg">Verify using your PIN, Password or Pattern</string>
+    <string name="second_tap_instruction">Tap on POS before the timer run out!</string>
+    <string name="payment_transaction_sent">Payment data successfully sent to POS.</string>
+    <string name="unsupported_cvm">Unsupported verification method</string>
+    <string name="payment_timeout">Payment timeout. Please try again.</string>
+    <string name="error_sdk_not_initialized">SDK has not been initialized</string>
+    <string name="error_unable_to_reload_card_list">Unable to load the card list</string>
+    <string name="error_unable_to_reload_card_list_secure_storage">Unable to load the card list due to secure storage error</string>
+
+    <string name="error_no_cards">There are no cards provisioned</string>
+    <string name="error_default_card_set_fail">Failed to set default card</string>
+    <string name="btn_change_card">Change card</string>
+    <string name="payment_processing">Processing …</string>
+    <string name="title_card_picker">Please, select a payment card</string>
+    <string name="title_payment_amount">Transaction amount</string>
+    <string name="title_payment_authenticate">Please tap to authenticate the transaction</string>
+    <string name="title_transaction_result">Transaction Result</string>
+    <string name="title_used_card">Card for Transaction</string>
+    <string name="title_default_card">Default Card</string>
+    <string name="title_timer">Authentication Validity Timer</string>
+
+
+    <!--       HCE Service        -->
+    <string name="hce_service_description">MPay</string>
+    <string name="aid_description">>MPay Pay aid_description</string>
+
+    <!--       Action bar menu-->
+    <string name="action_changePin">Change PIN</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_wipe_data">Wipe Data</string>
+    <string name="action_enroll_by_webui">Enroll by WebUI</string>
+    <string name="action_disable_pushnoti">Disable Push Noti</string>
+    <string name="action_clearmock">Enable Push Noti</string>
+    <string name="action_enable_delegated_cdcvm">ON Delegated CDCVM</string>
+    <string name="action_disable_delegated_cdcvm">OFF Delegated CDCVM</string>
+
+    <!--    Dialog-->
+    <string name="delete_alert_message">Do you really want to wipe wallet?</string>
+
+    <!--    Toast messages -->
+    <string name="wipe_triggered_toast">Wipe Will Be Triggered After Restart</string>
+
+    <!--    SecureInput Type labels-->
+    <string name="label_setPin">Enter your Wallet PIN</string>
+    <string name="label_setPin_confirm">Confirm your Wallet PIN</string>
+    <string name="label_verifyPin">Verify your Wallet PIN</string>
+    <string name="label_changePin">Enter your new Wallet PIN</string>
+    <string name="label_changePin_confirm">Confirm your new Wallet PIN</string>
+
+    <!-- Replenishment -->
+    <string name="replenish_request">Replenishment of Credentials requested for token</string>
+
+    <!--Pre-Entry-->
+    <string name="keyguard_title">Verify by Keyguard</string>
+    <string name="keyguard_message">Verify using your PIN, Password or Pattern</string>
+    <string name="tap_your_phone_to_the_pos_">Tap your phone to the POS..</string>
+    <string name="cancel">Cancel</string>
+    <string name="click_icon_to_add_card">Please click + icon to add card</string>
+    <string name="wait_a_second">Wait a second....</string>
+    <string name="unset_default_card_complete">Unset of non-active Default card is done. Please set an active card as default card or Enroll new card</string>
+    <string name="choose_action">Choose an Action</string>
+    <string name="suspend">Suspend</string>
+    <string name="delete">Delete</string>
+    <string name="resume">resume</string>
+    <string name="change_benchmarking">Change Benchmark</string>
+    <string name="payment_experience">Payment Experience</string>
+    <string name="txt_about">About</string>
+
+    <string name="processing_enrollment">Enrollment ready</string>
+    <string name="input_your_project_id">Input your Project ID for GCM Registration and click "start". For HMS you can ignore this field and press button.</string>
+    <string name="cps_enroll_error">CPS Enrollment error</string>
+    <string name="msg_retry_activation_code">Please retry the activation code again</string>
+    <string name="firebase_token_update">Firebase token updated</string>
+    <string name="pay">Pay</string>
+    <string name="dsrp_amount_hint">Amount \n Add two extra zero at end, as last two digits will be treated as decimal points</string>
+    <string name="transaction_input">Transaction Input</string>
+    <string name="title_output_data">Remote Payment Output And Transaction Context</string>
+    <string name="transaction_started">Transaction started</string>
+    <string name="title_activity_card_settings">CardSettingsActivity</string>
+    <!--
+    This string is used for square devices and overridden by hello_world in
+    values-round/strings.xml for round devices.
+    -->
+    <string name="hello_world">Hello Square World!</string>
+    <string name="standard_qr">Standard QR</string>
+    <string name="condensed_qr">Condensed QR</string>
+    <string name="select_qr_type">Select QR Type</string>
+
+</resources>

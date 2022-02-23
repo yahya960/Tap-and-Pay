@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    android:background="@color/cardview_dark_background"
+    app:cardElevation="2dp"
+    app:cardPreventCornerOverlap="false">
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/aidLabel"
+                android:layout_width="0dp"
+                android:layout_weight="2"
+                android:layout_height="match_parent"
+                android:layout_margin="12dp"
+                android:textAppearance="?attr/textAppearanceListItem"
+                android:gravity="start|center_vertical"
+                android:layout_gravity="center_vertical"
+                android:textStyle="bold"
+                tools:text="Empty AID Label"/>
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/orderUp"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_horizontal"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="6dp"
+                    android:layout_marginRight="6dp"
+                    android:src="@drawable/ic_baseline_arrow_upward_24" />
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/orderDown"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_horizontal"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="6dp"
+                    android:layout_marginLeft="6dp"
+                    android:src="@drawable/ic_baseline_arrow_downward_24" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+        </androidx.appcompat.widget.LinearLayoutCompat>
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/aid"
+                android:layout_width="0dp"
+                android:layout_weight="2"
+                android:layout_height="match_parent"
+                android:layout_margin="12dp"
+                android:textAppearance="?attr/textAppearanceListItem"
+                android:gravity="start|center_vertical"
+                tools:text="A000000003999910"/>
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:gravity="end"
+                android:orientation="horizontal">
+                <androidx.appcompat.widget.AppCompatToggleButton
+                    android:id="@+id/lockStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_below="@+id/switch1"
+                    android:textOff="LOCKED"
+                    android:textOn="UNLOCKED" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+        </androidx.appcompat.widget.LinearLayoutCompat>
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+</androidx.cardview.widget.CardView>

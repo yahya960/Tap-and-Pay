@@ -1,0 +1,630 @@
+package test.hcesdk.mpay.payment.contactless;
+
+import android.annotation.SuppressLint;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.PowerManager;
+import androidx.fragment.app.Fragment;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+
+import android.util.Log;
+import android.view.MenuItem;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.widget.Toast;
+
+import com.gemalto.mfs.mwsdk.cdcvm.DeviceCVMVerifier;
+import com.gemalto.mfs.mwsdk.dcm.DigitalizedCard;
+import com.gemalto.mfs.mwsdk.dcm.DigitalizedCardManager;
+import com.gemalto.mfs.mwsdk.dcm.PaymentType;
+import com.gemalto.mfs.mwsdk.payment.CHVerificationMethod;
+import com.gemalto.mfs.mwsdk.payment.PaymentBusinessManager;
+import com.gemalto.mfs.mwsdk.payment.PaymentBusinessService;
+import com.gemalto.mfs.mwsdk.payment.PaymentServiceErrorCode;
+import com.gemalto.mfs.mwsdk.payment.chverification.CHVerificationManager;
+import com.gemalto.mfs.mwsdk.payment.engine.CardActivationListener;
+import com.gemalto.mfs.mwsdk.payment.engine.PaymentService;
+import com.gemalto.mfs.mwsdk.sdkconfig.SDKError;
+import com.gemalto.mfs.mwsdk.utils.async.AbstractAsyncHandler;
+import com.gemalto.mfs.mwsdk.utils.async.AsyncResult;
+import com.gemalto.mfs.mwsdk.utils.chcodeverifier.CHCodeVerifier;
+import com.gemalto.mfs.mwsdk.utils.chcodeverifier.CHCodeVerifierErrorCode;
+import com.gemalto.mfs.mwsdk.utils.chcodeverifier.CHCodeVerifierListener;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
+import test.hcesdk.mpay.App;
+import test.hcesdk.mpay.MainActivity;
+import test.hcesdk.mpay.R;
+import test.hcesdk.mpay.app.AppBuildConfigurations;
+import test.hcesdk.mpay.app.AppConstants;
+import test.hcesdk.mpay.model.MyDigitalCard;
+import test.hcesdk.mpay.payment.DeviceCVMActivity;
+import test.hcesdk.mpay.payment.delegatedauth.DelegatedCDCVMActivity;
+import test.hcesdk.mpay.util.AppExecutors;
+import test.hcesdk.mpay.util.AppLogger;
+import test.hcesdk.mpay.util.SharedPreferenceUtils;
+import test.hcesdk.mpay.util.TransactionContextHelper;
+import test.hcesdk.mpay.util.Util;
+
+import static test.hcesdk.mpay.payment.delegatedauth.DelegatedCDCVMActivity.EXTRA_CVM;
+import static test.hcesdk.mpay.payment.delegatedauth.DelegatedCDCVMActivity.EXTRA_DESCRIPTION;
+import static test.hcesdk.mpay.payment.delegatedauth.DelegatedCDCVMActivity.EXTRA_TITLE;
+
+public class PaymentContactlessActivity extends AppCompatActivity {
+    private static final String TAG = PaymentContactlessActivity.class.getSimpleName();
+    public static final String DEFAULT_CARD_TAG = " [Default]";
+    public static final String PAYMENT_STATE_EXTRA = "PAYMENT_STATE";
+    View progressLayout;
+    ViewGroup fragmentContainer;
+
+    private DeviceCVMVerifier verifier;
+    private static final int MAX_ALLOWED_TIME_DIFFERENCE = 10000;
+    public static final int REQ_CODE_DELEGATE_CDCVM = 110;
+    private static final int REQ_CODE_FINGERPRINT = 10000;
+    private final int TIMEOUT_AFTER_APP_IN_BACKGROUND = 45000;
+
+    CHCodeVerifier chCodeVerifier;
+    ContactlessPayListener payListener;
+    private PowerManager.WakeLock mWakeLock;
+    private List<MyDigitalCard> cardList;
+    private AppExecutors appExecutors;
+    private ContactlessPayListener.PaymentState paymentState;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        setTitle(R.string.title_payment);
+        setContentView(R.layout.activity_payment);
+        payListener = ((App) getApplication()).getContactlessPayListener();
+        paymentState = (ContactlessPayListener.PaymentState) getIntent().getExtras().getSerializable(PAYMENT_STATE_EXTRA);
+        AppLogger.d(AppConstants.APP_TAG, "Payment Screen Display" +
+                paymentState + " " + AppConstants.STARTED);
+
+        progressLayout = findViewById(R.id.progress_layout);
+        fragmentContainer = findViewById(R.id.fragment_container);
+
+        appExecutors = ((App) getApplication()).getAppExecutors();
+
+        if (AppBuildConfigurations.USE_TIMEOUT_AFTER_FIRST_TAP) {
+            //Added timeout after 1st TAP to cancel transaction if user delays authentication
+            new Handler().postDelayed(() -> {
+                deactivatePaymentServiceAndResetState();
+            }, TIMEOUT_AFTER_APP_IN_BACKGROUND);
+        }
+
+        //getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        //getSupportActionBar().setDisplayShowHomeEnabled(true);
+
+        unlockAndWake();
+
+        toggleProgress(true);
+
+        handlePaymentState();
+        AppLogger.d(AppConstants.APP_TAG, "Payment Screen Display" +
+                payListener.getCurrentState() + " " + AppConstants.ENDED);
+
+    }
+
+
+    public void unlockAndWake() {
+        AppLogger.d(TAG, "unlockAndWake is invoked");
+
+        //Return if mWakelock is non null as it's already initialized and acquired
+        if (mWakeLock != null && mWakeLock.isHeld())
+            return;
+
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+
+        if (pm != null && !pm.isInteractive()) {
+            mWakeLock = pm.newWakeLock(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                    | PowerManager.ACQUIRE_CAUSES_WAKEUP, getResources().getString(R.string.app_name) + "CA:wakelock");
+            if (mWakeLock != null)
+                mWakeLock.acquire();
+        }
+
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
+    }
+
+    public void releaseWakeLockAndClearFlag() {
+        AppLogger.d(TAG, "WakeLock is released");
+
+        if (mWakeLock != null) {
+            try {
+                mWakeLock.release();
+            } catch (Exception e) {
+                // Ignoring this exception, probably wakeLock was already released
+                AppLogger.e(TAG, "Exception observed in releasing wakeLock");
+            } finally {
+                mWakeLock = null;
+            }
+        }
+
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handlePaymentState();
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // handle arrow click here
+        if (item.getItemId() == android.R.id.home) {
+            onBackPressed();
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        AppLogger.i(TAG, "onActivityResult() : " + resultCode);
+
+        if (requestCode == REQ_CODE_FINGERPRINT) {
+            // Check for result code RESULT_FIRST_USER.
+            // Activity result is RESULT_CANCELLED if activity stack is cleared by singleInstance
+            // launch mode.
+            switch (resultCode) {
+                case RESULT_CANCELED:
+                    break;
+                case RESULT_FIRST_USER:
+//                    deactivatePaymentServiceAndResetState();
+//                    finish();
+                    finish();
+                    break;
+            }
+        } else if (requestCode == REQ_CODE_DELEGATE_CDCVM) {
+            verifyTransactionStatus(resultCode == RESULT_OK, System.currentTimeMillis());
+        }
+
+
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        AppLogger.d(TAG, "==PaymentContactlessActivity onDestroy==");
+        deactivatePaymentServiceAndResetState();
+        releaseWakeLockAndClearFlag();
+    }
+
+
+    public void switchFragment(Fragment fragment, boolean replace) {
+        if (replace) {
+            getSupportFragmentManager().beginTransaction().replace(R.id.fragment_container, fragment).commit();
+        } else {
+            getSupportFragmentManager().beginTransaction().add(R.id.fragment_container, fragment).commit();
+        }
+
+        toggleProgress(false);
+    }
+
+    /**********************************************************/
+    /*                Private helpers                         */
+    /**********************************************************/
+    private void toggleProgress(boolean show) {
+        AppLogger.d(TAG, "toggleProgress(" + show + "): progressLayout=" + progressLayout + " fragmentContainer=" + fragmentContainer);
+        progressLayout.setVisibility(show ? View.VISIBLE : View.GONE);
+        fragmentContainer.setVisibility(show ? View.GONE : View.VISIBLE);
+    }
+
+    /**
+     * Display UI according to payment state machine.
+     */
+    private void handlePaymentState() {
+        ContactlessPayListener.PaymentState state = payListener.getCurrentState();
+		AppLogger.i(TAG, "state!!"+state.name());
+
+
+        if (state == ContactlessPayListener.PaymentState.STATE_NONE) {
+            AppLogger.i(TAG, "Unknown payment state!! Close PaymentContactlessActivity");
+            finish();
+            return;
+        }
+
+        switch (state) {
+            case STATE_ON_TRANSACTION_STARTED:
+                showWaitFragment();
+                break;
+            case STATE_ON_AUTHENTICATION_REQUIRED:
+                if(!CHVerificationManager.INSTANCE.isFCDCVMSupported()){
+                    AppLogger.d(TAG,"this is card like, so stay in wait fragment ");
+                    showWaitFragment();
+                    break;
+                }
+                CHVerificationMethod chVerificationMethod = payListener.getChVerificationMethod();
+                if (chVerificationMethod == null) chVerificationMethod = CHVerificationMethod.NONE;
+                switch (chVerificationMethod) {
+                    case WALLET_PIN:
+                    case BIOMETRICS:
+                    case DEVICE_KEYGUARD:
+                        // Regular flow could continue with CHV verification
+                        triggerCHVverification();
+                        break;
+                    default:
+                        // NOTE: Not supported any other verification
+                        deactivatePaymentServiceAndResetState();
+                        displayAndLogError(getString(R.string.unsupported_cvm), "Verification method " + chVerificationMethod + " is not supported!");
+                }
+
+                break;
+            case STATE_ON_READY_TO_TAP:
+                showTimerFragment();
+                break;
+            case STATE_ON_ERROR:
+                FragmentResult resultFrag;
+                if(payListener.getPaymentServiceErrorCode() == PaymentServiceErrorCode.DEVICE_SUSPICIOUS){
+                    resultFrag = FragmentResult.getInstance(false, "Device is Suspicious", payListener.getTransactionContext());
+                }else{
+                    resultFrag = FragmentResult.getInstance(false, payListener.getErrorMessage(), payListener.getTransactionContext());
+                }
+                switchFragment(resultFrag, true);
+                break;
+            case STATE_ON_TRANSACTION_COMPLETED:
+                FragmentResult resultFragSuccess = FragmentResult.getInstance(true, getString(R.string.payment_transaction_sent), payListener.getTransactionContext());
+                switchFragment(resultFragSuccess, true);
+                break;
+        }
+
+    }
+
+    private void showTimerFragment() {
+        final FragmentTimer fragmentTimer = new FragmentTimer();
+        switchFragment(fragmentTimer, true);
+        // The button to change card is expected to be
+        // present only when PFP is enabled is in use
+        fragmentTimer.setBtnChangeCardOnClickListener(view -> {
+            Intent intent = new Intent(PaymentContactlessActivity.this, CardChooserActivity.class);
+            startActivity(intent);
+        });
+
+    }
+
+    private void showWaitFragment() {
+        toggleProgress(true);
+//        final FragmentWait fragmentWait = new FragmentWait();
+//        switchFragment(fragmentWait, true);
+    }
+
+
+    private void triggerCHVverification() {
+        AppLogger.i(AppConstants.APP_TAG, ".triggerCHVerification");
+        final CHVerificationMethod chVerificationMethod = payListener.getChVerificationMethod();
+        PaymentService paymentService = payListener.getPaymentService();
+        boolean delegatedCDCVM = SharedPreferenceUtils.getDelegatedCDCVMStatus(this);
+
+        if (chVerificationMethod == CHVerificationMethod.WALLET_PIN) {
+            chCodeVerifier = (CHCodeVerifier) paymentService.getCHVerifier(chVerificationMethod);
+            chCodeVerifier.setCHCodeVerifierListener(chCodeVerifierListener);
+            setupGSK_43(chCodeVerifier, getResources().getString(R.string.enter_pin));
+        } else if (chVerificationMethod == CHVerificationMethod.BIOMETRICS
+                || chVerificationMethod == CHVerificationMethod.DEVICE_KEYGUARD) {
+            if(delegatedCDCVM) {
+
+                verifier = (DeviceCVMVerifier) paymentService.getCHVerifier(payListener.getChVerificationMethod());
+
+                long authTimeDifference = System.currentTimeMillis() - App.lastAuthTS;
+                long finalDiff = payListener.getCvmResetTimeout() - authTimeDifference;
+                Log.d(TAG, "Last Auth TS "+ App.lastAuthTS);
+                Log.d(TAG, "Auth time difference is " + authTimeDifference);
+                Log.d(TAG, "CVM Reset time is " + payListener.getCvmResetTimeout());
+                Log.d(TAG, "Final time difference is " + finalDiff);
+                if (finalDiff >= MAX_ALLOWED_TIME_DIFFERENCE) {
+                    payListener.setCvmResetTimeout(finalDiff);
+                    Log.d(TAG, "Final time difference is more than " + MAX_ALLOWED_TIME_DIFFERENCE);
+                    verifyTransactionStatus(true, App.lastAuthTS);
+                    App.lastAuthTS = 0;
+                    return;
+                }
+
+                final Intent intent = new Intent(this, DelegatedCDCVMActivity.class);
+                intent.putExtra(EXTRA_TITLE, getString(R.string.verify_using_fingerprint));
+                intent.putExtra(EXTRA_CVM, chVerificationMethod);
+                String description = "Transaction Amount: " +
+                        TransactionContextHelper.formatAmountWithCurrency(payListener.getTransactionContext());
+                intent.putExtra(EXTRA_DESCRIPTION, description);
+                overridePendingTransition(0, 0);
+                startActivityForResult(intent, REQ_CODE_DELEGATE_CDCVM);
+            } else {
+                Intent intent = new Intent(this, DeviceCVMActivity.class);
+                intent.putExtra(DeviceCVMActivity.EXTRA_CVM, chVerificationMethod);
+                intent.putExtra(DeviceCVMActivity.EXTRA_AMOUNT, TransactionContextHelper
+                        .formatAmountWithCurrency(payListener.getTransactionContext()));
+                overridePendingTransition(0, 0);
+                startActivityForResult(intent, REQ_CODE_FINGERPRINT);
+            }
+        }
+    }
+
+    private void verifyTransactionStatus(boolean isSuccess, long lastSuccessAuthTS) {
+        if (isSuccess) {
+            Toast.makeText(this, "Delegated Authentication Successful", Toast.LENGTH_LONG).show();
+            verifier.onDelegatedAuthPerformed(lastSuccessAuthTS);
+        } else {
+            Toast.makeText(this, "Delegated Authentication Cancelled", Toast.LENGTH_LONG).show();
+            FragmentResult resultFrag = FragmentResult.getInstance(false,
+                    "Transaction authentication failed", payListener.getTransactionContext());
+            switchFragment(resultFrag, true);
+            verifier.onDelegatedAuthCancelled();
+        }
+    }
+
+
+    @SuppressLint("HandlerLeak")
+    private void reloadCardList() {
+
+        AppLogger.d(TAG, "DigitalizedCardManager.getAllCards() start");
+
+        DigitalizedCardManager.getAllCards(new AbstractAsyncHandler<String[]>() {
+            @Override
+            public void onComplete(final AsyncResult<String[]> asyncResult) {
+                AppLogger.d(TAG, "DigitalizedCardManager.getAllCards() completed: " + asyncResult.isSuccessful());
+
+                if (asyncResult.isSuccessful()) {
+                    List<DigitalizedCard> allCards = new ArrayList<>();
+
+                    for (String token : asyncResult.getResult()) {
+                        AppLogger.d(TAG, "Card tokenId: " + token);
+                        allCards.add(DigitalizedCardManager.getDigitalizedCard(token));
+                    }
+
+                    final String defaultCardTokenId = DigitalizedCardManager
+                            .getDefault(PaymentType.CONTACTLESS, null).waitToComplete().getResult();
+
+                    cardList = new ArrayList<>();
+                    for (DigitalizedCard card : allCards) {
+                        MyDigitalCard mCard = new MyDigitalCard(card);
+                        mCard.setDigitalizedCardId(DigitalizedCardManager.getDigitalCardId(card.getTokenizedCardID()));
+
+                        //check default
+                        mCard.setDefaultCardFlag(defaultCardTokenId.equals(card.getTokenizedCardID()));
+
+                        //get card status
+                        mCard.setCardStatus(card.getCardState(null).waitToComplete().getResult());
+
+                        cardList.add(mCard);
+                        AppLogger.d(TAG, "Card stored to list: " + mCard);
+
+                    }
+
+                    showCardListPickerIfNeeded();
+                } else {
+                    toggleProgress(false);
+                    if (MainActivity.STORAGE_COMPONENT_ERROR == asyncResult.getErrorCode()) {
+
+                        HashMap<String, Object> additionalInformation = asyncResult.getAdditionalInformation();
+
+                        if (additionalInformation != null && additionalInformation.size() > 0) {
+                            Object additionalObject = additionalInformation.get(MainActivity.STORAGE_COMPONENT_EXCEPTION_KEY);
+                            if (additionalObject != null && additionalObject instanceof Exception) {
+                                Exception exception = (Exception) additionalObject;
+                                AppLogger.e(TAG, "Get All cards failed because" + exception.getMessage());
+                                exception.printStackTrace();
+                                //In production app, this event to be sent to Analytics server. Exception object can be sent to analytics, if available
+
+                            }
+                        }
+                        // the production MPA can retry again instead.
+                        displayAndLogError(getString(R.string.error_unable_to_reload_card_list_secure_storage), "Failed to reload the card list due to secure storage: " + asyncResult.getErrorMessage());
+                        // if issue, persists even after certain number of retries. Recommend to do the following
+                        // 1. Send a specific error event that retry failed
+                        // 2. SDK APIs cannot be used in this user session anymore. so block all SDK usage from this point onwards
+
+
+                    } else {
+                        displayAndLogError(getString(R.string.error_unable_to_reload_card_list), "Failed to reload the card list: " + asyncResult.getErrorMessage());
+                    }
+                }
+            }
+        });
+    }
+
+
+    private void showCardListPickerIfNeeded() {
+
+        AppLogger.d(TAG, "Card list size: " + (cardList == null ? "null" : cardList.size()));
+
+
+        if (cardList == null || cardList.size() == 0) {
+            displayAndLogError(getString(R.string.error_no_cards), getString(R.string.error_no_cards));
+        } else if (cardList.size() == 1) {
+            // no need to change or show the dialog at all
+            // just make sure it is picked as default
+            final MyDigitalCard card = cardList.get(0);
+            if (card.isDefaultCardFlag()) {
+                // no need to switch => show again the timer
+                toggleProgress(false);
+            } else {
+                activateCardForPayment(card.getTokenId());
+            }
+        } else {
+
+            final String[] cardItems = new String[cardList.size()];
+            int i = 0;
+            for (MyDigitalCard card : cardList) {
+
+                cardItems[i] = "[" + i + "] Token ID: " + card.getTokenId()
+                        + "\nDigital Card ID: " + card.getDigitalizedCardId();
+
+                if (card.isDefaultCardFlag()) {
+                    cardItems[i] = cardItems[i] + DEFAULT_CARD_TAG;
+                }
+
+                i++;
+            }
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle(R.string.title_card_picker);
+            builder.setItems(cardItems, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+
+                    final MyDigitalCard pickedCard = cardList.get(which);
+
+                    if (pickedCard.isDefaultCardFlag()) {
+                        // no need to switch => show again the timer
+                        toggleProgress(false);
+                    } else {
+                        activateCardForPayment(pickedCard.getTokenId());
+                    }
+                }
+            });
+            builder.setCancelable(false);
+            builder.show();
+
+        }
+
+
+    }
+
+    private void activateCardForPayment(final String tokenId) {
+
+        AppLogger.d(TAG, "Switching default card for payment to: " + tokenId);
+
+
+        final PaymentBusinessService paymentBusinessService = PaymentBusinessManager.getPaymentBusinessService();
+
+        CardActivationListener cardActivationListener = new CardActivationListener() {
+            @Override
+            public void onCardActivated(PaymentServiceErrorCode paymentServiceErrorCode) {
+                AppLogger.d(TAG, "onCardActivated(): paymentServiceErrorCode = " + paymentServiceErrorCode);
+
+                appExecutors.mainThread().execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        // The timer should be the last visible fragment so no need to recreate,
+                        // just hide the progress indicator
+                        toggleProgress(false);
+
+                        if (paymentServiceErrorCode == PaymentServiceErrorCode.SUCCESS) {
+                            //showTimerFragment();
+                        } else {
+                            final String logMessage = getString(R.string.error_default_card_set_fail) + " Reason: " + paymentServiceErrorCode;
+                            displayAndLogError(getString(R.string.error_default_card_set_fail), logMessage);
+                        }
+                    }
+                });
+            }
+        };
+
+        paymentBusinessService.activateCard(tokenId, PaymentType.CONTACTLESS, payListener, cardActivationListener);
+
+
+    }
+
+
+    private void displayAndLogError(final String userMessage, final String logMessage) {
+        if (logMessage != null) {
+            AppLogger.e(TAG, logMessage);
+        }
+
+        FragmentResult resultFrag = FragmentResult.getInstance(false, userMessage, payListener.getTransactionContext());
+        switchFragment(resultFrag, true);
+    }
+
+    private void deactivatePaymentService() {
+        PaymentBusinessService paymentServ = PaymentBusinessManager.getPaymentBusinessService();
+        if (paymentServ != null) {
+            AppLogger.d(TAG, "paymentServ is deactivated");
+            paymentServ.deactivate();
+        } else {
+            AppLogger.e(TAG, "Failed to get PaymentBusinessService to deactivate");
+        }
+    }
+
+    public void deactivatePaymentServiceAndResetState() {
+        AppLogger.i(TAG, "deactivatePaymentServiceAndResetState");
+        deactivatePaymentService();
+        payListener.resetState();
+    }
+
+
+    /**********************************************************/
+    /*                Wallet PIN CDCVM                        */
+
+    /**********************************************************/
+    private void setupGSK_43(CHCodeVerifier chCodeVerifier, String message) {
+
+    }
+
+
+    CHCodeVerifierListener chCodeVerifierListener = new CHCodeVerifierListener() {
+        @Override
+        public void onVerificationError(final int i, SDKError<CHCodeVerifierErrorCode> sdkCHCodeVerifierErrorCode) {
+            AppLogger.i(TAG, "wallet pin error: " + i);
+            AlertDialog.Builder builder;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                builder = new AlertDialog.Builder(getApplicationContext(), android.R.style.Theme_Material_Dialog_Alert);
+            } else {
+                builder = new AlertDialog.Builder(getApplicationContext());
+            }
+            builder.setTitle(getString(R.string.wallet_pin))
+                    .setMessage(getString(R.string.text_retry_wallet_pin, i))
+                    .setCancelable(false)
+                    .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int which) {
+                            setupGSK_43(chCodeVerifier, getString(R.string.text_retry_wallet_pin, i));
+                        }
+                    })
+                    .setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int which) {
+                            dialog.cancel();
+                            deactivatePaymentServiceAndResetState();
+                            finish();
+                        }
+                    })
+                    .setIcon(android.R.drawable.ic_dialog_alert)
+                    .show();
+        }
+
+        @Override
+        public void onVerificationSuccess() {
+            AppLogger.i(TAG, ".onVerificationSuccess. expect callback for onDataReady");
+            toggleProgress(true);
+        }
+
+        @Override
+        public void maxRetryReached() {
+            // NOTE: Dialog fragment for secure key pad,later will change Secure key pad as a view
+            AppLogger.i(TAG, "wallet pin max reached");
+            AlertDialog.Builder builder;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                builder = new AlertDialog.Builder(getApplicationContext(), android.R.style.Theme_Material_Dialog_Alert);
+            } else {
+                builder = new AlertDialog.Builder(getApplicationContext());
+            }
+            builder.setTitle(getString(R.string.wallet_pin))
+                    .setMessage(getString(R.string.maximum_attempt))
+                    .setCancelable(false)
+                    .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int which) {
+                            dialog.cancel();
+                            deactivatePaymentServiceAndResetState();
+                            finish();
+                        }
+                    })
+                    .setIcon(android.R.drawable.ic_dialog_alert)
+                    .show();
+        }
+    };
+
+
+}
